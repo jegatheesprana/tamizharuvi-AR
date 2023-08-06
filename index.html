@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<meta
+    name="viewport"
+    content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+/>
+<!-- three.js library -->
+<!-- <script src="vendor/three.js/build/three.min.js"></script> -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r124/three.min.js"></script>
+<!-- ar.js -->
+<script src="../build/ar.js"></script>
+<script>
+    THREEx.ArToolkitContext.baseURL = "../patterns/"
+</script>
+<script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
+
+<body
+    style="
+        margin: 0px;
+        overflow: hidden;
+        font-family: Monospace;
+        width: 100vw;
+        height: 100vh;
+    "
+>
+    <canvas id="main-canvas" style="display: block"></canvas>
+    <video
+        id="videoElement"
+        src="DJ.mp4"
+        loop
+        autoplay
+        style="display: none"
+    ></video>
+    <script>
+        //////////////////////////////////////////////////////////////////////////////////
+        //		Init
+        //////////////////////////////////////////////////////////////////////////////////
+
+        const canvasEle = document.getElementById("main-canvas")
+        // init renderer
+        var renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+            canvas: canvasEle,
+        })
+        renderer.setClearColor(new THREE.Color("lightgrey"), 0)
+        renderer.setSize(window.innerWidth, window.innerHeight)
+        renderer.domElement.style.position = "absolute"
+        renderer.domElement.style.top = "0px"
+        renderer.domElement.style.left = "0px"
+        // document.body.appendChild(renderer.domElement)
+
+        // array of functions for the rendering loop
+        var onRenderFcts = []
+
+        // init scene and camera
+        var scene = new THREE.Scene()
+
+        // Lights
+
+        const pointLight = new THREE.PointLight(0x80ffffff)
+        pointLight.position.set(0, 5, -7)
+
+        const ambientLight = new THREE.AmbientLight(0x11ffffff)
+        scene.add(pointLight, ambientLight)
+
+        //////////////////////////////////////////////////////////////////////////////////
+        //		Initialize a basic camera
+        //////////////////////////////////////////////////////////////////////////////////
+
+        // Create a camera
+        var camera = new THREE.Camera()
+        scene.add(camera)
+
+        ////////////////////////////////////////////////////////////////////////////////
+        //          handle arToolkitSource
+        ////////////////////////////////////////////////////////////////////////////////
+
+        var arToolkitSource = new THREEx.ArToolkitSource({
+            // to read from the webcam
+            sourceType: "webcam",
+            trackingMethod: "best",
+
+            // // to read from an image
+            // sourceType : 'image',
+            // sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',
+
+            // to read from a video
+            // sourceType : 'video',
+            // sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',
+        })
+
+        arToolkitSource.init(function onReady() {
+            onResize()
+            setTimeout(onResize, 500)
+        })
+
+        // handle resize
+        window.addEventListener("resize", function () {
+            onResize()
+        })
+
+        function onResize() {
+            arToolkitSource.onResizeElement()
+            arToolkitSource.copyElementSizeTo(renderer.domElement)
+            if (arToolkitContext.arController !== null) {
+                arToolkitSource.copyElementSizeTo(
+                    arToolkitContext.arController.canvas
+                )
+            }
+        }
+        ////////////////////////////////////////////////////////////////////////////////
+        //          initialize arToolkitContext
+        ////////////////////////////////////////////////////////////////////////////////
+
+        // create atToolkitContext
+        var arToolkitContext = new THREEx.ArToolkitContext({
+            cameraParametersUrl:
+                THREEx.ArToolkitContext.baseURL +
+                "../data/data/camera_para.dat",
+            detectionMode: "mono",
+        })
+        // initialize it
+        arToolkitContext.init(function onCompleted() {
+            // copy projection matrix to camera
+            camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix())
+        })
+
+        // update artoolkit on every frame
+        onRenderFcts.push(function () {
+            if (arToolkitSource.ready === false) return
+
+            arToolkitContext.update(arToolkitSource.domElement)
+
+            // update scene.visible if the marker is seen
+            scene.visible = camera.visible
+        })
+
+        ////////////////////////////////////////////////////////////////////////////////
+        //          Create a ArMarkerControls
+        ////////////////////////////////////////////////////////////////////////////////
+
+        function init_render(number, patternUrl, callback) {
+            // build markerControls
+            var markerRoot1 = new THREE.Group()
+            markerRoot1.name = "marker" + number
+            scene.add(markerRoot1)
+
+            // init controls for camera
+            var markerControls = new THREEx.ArMarkerControls(
+                arToolkitContext,
+                markerRoot1,
+                {
+                    type: "pattern",
+                    patternUrl:
+                        // THREEx.ArToolkitContext.baseURL + "../data/data/patt.hiro",
+                        THREEx.ArToolkitContext.baseURL + patternUrl,
+                    // patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.kanji',
+                    // as we controls the camera, set changeMatrixMode: 'cameraTransformMatrix'
+                    // changeMatrixMode: "cameraTransformMatrix",
+                }
+            )
+
+            callback(markerRoot1)
+        }
+
+        // as we do changeMatrixMode: 'cameraTransformMatrix', start with invisible scene
+        scene.visible = false
+
+        //////////////////////////////////////////////////////////////////////////////////
+        //		render the whole thing on the page
+        //////////////////////////////////////////////////////////////////////////////////
+
+        // render the scene
+        onRenderFcts.push(function () {
+            renderer.render(scene, camera)
+        })
+
+        // run the rendering loop
+        var lastTimeMsec = null
+        requestAnimationFrame(function animate(nowMsec) {
+            // keep looping
+            requestAnimationFrame(animate)
+            // measure time
+            lastTimeMsec = lastTimeMsec || nowMsec - 1000 / 60
+            var deltaMsec = Math.min(200, nowMsec - lastTimeMsec)
+            lastTimeMsec = nowMsec
+            // call each update function
+            onRenderFcts.forEach(function (onRenderFct) {
+                onRenderFct(deltaMsec / 1000, nowMsec / 1000)
+            })
+        })
+
+        //////////////////////////////////////////////////////////////////////////////////
+        //		add an object in the scene
+        //////////////////////////////////////////////////////////////////////////////////
+
+        // init_render(1, "pattern-tla.patt", (patternRoot) => {
+        //     // add a torus knot
+        //     var geometry = new THREE.CubeGeometry(1, 1, 1)
+        //     var material = new THREE.MeshNormalMaterial({
+        //         transparent: true,
+        //         opacity: 0.5,
+        //         side: THREE.DoubleSide,
+        //     })
+        //     var mesh = new THREE.Mesh(geometry, material)
+        //     mesh.position.y = geometry.parameters.height / 2
+
+        //     // Load the video element
+        //     var videoElement = document.getElementById("videoElement")
+
+        //     // Create a video texture
+        //     var videoTexture = new THREE.VideoTexture(videoElement)
+        //     videoTexture.minFilter = THREE.LinearFilter
+        //     videoTexture.magFilter = THREE.LinearFilter
+        //     videoTexture.format = THREE.RGBFormat
+
+        //     // Create a material using the video texture
+        //     var videoMaterial = new THREE.MeshBasicMaterial({
+        //         map: videoTexture,
+        //     })
+
+        //     var tvgeometry = new THREE.CubeGeometry(2, 0.2, 2)
+
+        //     // Set the material for the video side of the cube (assuming you want it on the front face)
+        //     tvgeometry.faces[4].materialIndex = 1
+        //     tvgeometry.faces[5].materialIndex = 1
+
+        //     // Create an array of materials, one for each face of the cube
+        //     var tvmaterials = [
+        //         new THREE.MeshNormalMaterial({
+        //             transparent: false,
+        //             opacity: 0.9,
+        //             side: THREE.DoubleSide,
+        //         }), // Material for other sides of the cube
+        //         videoMaterial, // Material for the video side of the cube
+        //     ]
+
+        //     var tvmesh = new THREE.Mesh(tvgeometry, tvmaterials)
+        //     tvmesh.position.y = tvgeometry.parameters.height + 1
+
+        //     const combined = new THREE.Group()
+        //     combined.add(mesh)
+        //     combined.add(tvmesh)
+
+        //     // Load the 3D model
+        //     // const loader = new THREE.GLTFLoader()
+        //     // loader.load(
+        //     //     "tamizharuvi.glb",
+        //     //     (gltf) => {
+        //     //         const model = gltf.scene
+        //     //         model.scale.set(5, 5, 5) // Scale the model to an appropriate size
+        //     //         model.rotation.x = Math.PI / 2
+        //     //         model.rotation.z = Math.PI
+
+        //     //         onRenderFcts.push(function (delta) {
+        //     //             model.rotation.y += (Math.PI * delta) / 2
+        //     //         })
+
+        //     //         combined.add(model)
+        //     //     },
+        //     //     undefined,
+        //     //     (error) => {
+        //     //         console.error("Error loading 3D model:", error)
+        //     //     }
+        //     // )
+
+        //     patternRoot.add(combined)
+        // })
+
+        // init_render(1, "pattern-1-qr.patt", (patternRoot) => {
+        //     var geometry = new THREE.TorusKnotGeometry(0.3, 0.1, 64, 16)
+        //     var material = new THREE.MeshNormalMaterial()
+        //     var mesh = new THREE.Mesh(geometry, material)
+        //     mesh.position.y = 0.5
+        //     patternRoot.add(mesh)
+
+        //     onRenderFcts.push(function (delta) {
+        //         mesh.rotation.x += Math.PI * delta
+        //     })
+        // })
+
+        function init_video(number, patternUrl, videoURL) {
+            init_render(number, patternUrl, (patternRoot) => {
+                // add a torus knot
+                var geometry = new THREE.CubeGeometry(1, 1, 1)
+                var material = new THREE.MeshNormalMaterial({
+                    transparent: true,
+                    opacity: 0.5,
+                    side: THREE.DoubleSide,
+                })
+                var mesh = new THREE.Mesh(geometry, material)
+                mesh.position.y = geometry.parameters.height / 2
+
+                const videoElement = document.createElement("video")
+                videoElement.src = videoURL
+                videoElement.autoplay = true
+                videoElement.loop = true
+                videoElement.muted = true
+
+                videoElement.play()
+
+                // Create a video texture
+                var videoTexture = new THREE.VideoTexture(videoElement)
+                videoTexture.minFilter = THREE.LinearFilter
+                videoTexture.magFilter = THREE.LinearFilter
+                videoTexture.format = THREE.RGBFormat
+                videoTexture.colorSpace = THREE.SRGBColorSpace
+
+                // Create a material using the video texture
+                var videoMaterial = new THREE.MeshBasicMaterial({
+                    map: videoTexture,
+                })
+
+                var tvgeometry = new THREE.CubeGeometry(
+                    (2 * 16) / 9,
+                    0.2 - 0.05,
+                    2
+                )
+
+                // Set the material for the video side of the cube (assuming you want it on the front face)
+                tvgeometry.faces[4].materialIndex = 1
+                tvgeometry.faces[5].materialIndex = 1
+
+                // Create an array of materials, one for each face of the cube
+                var tvmaterials = [
+                    new THREE.MeshNormalMaterial({
+                        transparent: true,
+                        opacity: 0.9,
+                        side: THREE.DoubleSide,
+                    }), // Material for other sides of the cube
+                    videoMaterial, // Material for the video side of the cube
+                ]
+
+                var tvmesh = new THREE.Mesh(tvgeometry, tvmaterials)
+                tvmesh.position.y = tvgeometry.parameters.height + 1 - 0.05
+
+                const combined = new THREE.Group()
+                combined.add(mesh)
+                combined.add(tvmesh)
+
+                var tvborderMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x000000,
+                    shininess: 100,
+                })
+
+                var tvborderGeometry1 = new THREE.CubeGeometry(0.2, 0.2, 2)
+
+                var tvborderMesh1 = new THREE.Mesh(
+                    tvborderGeometry1,
+                    tvborderMaterial
+                )
+                tvborderMesh1.position.y = tvgeometry.parameters.height + 1
+                tvborderMesh1.position.x = 16 / 9 + 0.1
+
+                combined.add(tvborderMesh1)
+
+                var tvborderGeometry2 = new THREE.CubeGeometry(0.2, 0.2, 2)
+                var tvborderMesh2 = new THREE.Mesh(
+                    tvborderGeometry2,
+                    tvborderMaterial
+                )
+                tvborderMesh2.position.y = tvgeometry.parameters.height + 1
+                tvborderMesh2.position.x = -16 / 9 - 0.1
+
+                combined.add(tvborderMesh2)
+
+                var tvborderGeometry3 = new THREE.CubeGeometry(
+                    (2 * 16) / 9 + 0.4,
+                    0.2,
+                    0.2
+                )
+                var tvborderMesh3 = new THREE.Mesh(
+                    tvborderGeometry3,
+                    tvborderMaterial
+                )
+                tvborderMesh3.position.y = tvgeometry.parameters.height + 1
+                tvborderMesh3.position.z = 1 + 0.1
+
+                combined.add(tvborderMesh3)
+
+                var tvborderGeometry4 = new THREE.CubeGeometry(
+                    (2 * 16) / 9 + 0.4,
+                    0.2,
+                    0.2
+                )
+                var tvborderMesh4 = new THREE.Mesh(
+                    tvborderGeometry4,
+                    tvborderMaterial
+                )
+                tvborderMesh4.position.y = tvgeometry.parameters.height + 1
+                tvborderMesh4.position.z = -1 - 0.1
+
+                combined.add(tvborderMesh4)
+
+                patternRoot.add(combined)
+            })
+        }
+
+        function init_object(number, patternUrl, objectURL) {
+            init_render(number, patternUrl, (patternRoot) => {
+                const combined = new THREE.Group()
+
+                // Load the 3D model
+                const loader = new THREE.GLTFLoader()
+                loader.load(
+                    objectURL,
+                    (gltf) => {
+                        const model = gltf.scene
+                        model.scale.set(5, 5, 5) // Scale the model to an appropriate size
+                        model.rotation.x = Math.PI / 2
+                        model.rotation.z = Math.PI
+
+                        onRenderFcts.push(function (delta) {
+                            model.rotation.y += (Math.PI * delta) / 2
+                        })
+
+                        combined.add(model)
+                    },
+                    undefined,
+                    (error) => {
+                        console.error("Error loading 3D model:", error)
+                    }
+                )
+
+                patternRoot.add(combined)
+            })
+        }
+
+        init_video(1, "pattern-2-qr.patt", "TLA.mp4")
+
+        init_object(5, "pattern-1-qr.patt", "THA.glb")
+    </script>
+</body>

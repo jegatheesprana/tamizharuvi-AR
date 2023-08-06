@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Three.js Box Rendering</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r124/three.min.js"></script>
+    </head>
+    <body>
+        <div id="canvas-container"></div>
+
+        <script>
+            // your_script.js
+
+            // Set up the scene, camera, and renderer
+            const scene = new THREE.Scene()
+            const camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            )
+            const renderer = new THREE.WebGLRenderer()
+            renderer.setSize(window.innerWidth, window.innerHeight)
+            document
+                .getElementById("canvas-container")
+                .appendChild(renderer.domElement)
+
+            //////////////////////////////////////////////////////////////////////////////////
+
+            //////////////////////////////////////////////////////////////////////////////////
+
+            // add a torus knot
+            var geometry = new THREE.CubeGeometry(1, 1, 1)
+            var material = new THREE.MeshNormalMaterial({
+                transparent: true,
+                opacity: 0.5,
+                side: THREE.DoubleSide,
+            })
+            var mesh = new THREE.Mesh(geometry, material)
+            mesh.position.y = geometry.parameters.height / 2
+
+            const videoElement = document.createElement("video")
+            videoElement.src = "DJ.mp4"
+            videoElement.autoplay = true
+            videoElement.loop = true
+            videoElement.muted = true
+
+            videoElement.play()
+
+            // Create a video texture
+            var videoTexture = new THREE.VideoTexture(videoElement)
+            videoTexture.minFilter = THREE.LinearFilter
+            videoTexture.magFilter = THREE.LinearFilter
+            videoTexture.format = THREE.RGBFormat
+            videoTexture.colorSpace = THREE.SRGBColorSpace
+
+            // Create a material using the video texture
+            var videoMaterial = new THREE.MeshBasicMaterial({
+                map: videoTexture,
+            })
+
+            var tvgeometry = new THREE.CubeGeometry((2 * 16) / 9, 0.2 - 0.05, 2)
+
+            // Set the material for the video side of the cube (assuming you want it on the front face)
+            tvgeometry.faces[4].materialIndex = 1
+            tvgeometry.faces[5].materialIndex = 1
+
+            // Create an array of materials, one for each face of the cube
+            var tvmaterials = [
+                new THREE.MeshNormalMaterial({
+                    transparent: true,
+                    opacity: 0.9,
+                    side: THREE.DoubleSide,
+                }), // Material for other sides of the cube
+                videoMaterial, // Material for the video side of the cube
+            ]
+
+            var tvmesh = new THREE.Mesh(tvgeometry, tvmaterials)
+            tvmesh.position.y = tvgeometry.parameters.height + 1 - 0.05
+
+            const combined = new THREE.Group()
+            combined.add(mesh)
+            combined.add(tvmesh)
+
+            var tvborderMaterial = new THREE.MeshPhongMaterial({
+                color: 0x000000,
+                shininess: 100,
+            })
+
+            var tvborderGeometry1 = new THREE.CubeGeometry(0.2, 0.2, 2)
+
+            var tvborderMesh1 = new THREE.Mesh(
+                tvborderGeometry1,
+                tvborderMaterial
+            )
+            tvborderMesh1.position.y = tvgeometry.parameters.height + 1
+            tvborderMesh1.position.x = 16 / 9 + 0.1
+
+            combined.add(tvborderMesh1)
+
+            var tvborderGeometry2 = new THREE.CubeGeometry(0.2, 0.2, 2)
+            var tvborderMesh2 = new THREE.Mesh(
+                tvborderGeometry2,
+                tvborderMaterial
+            )
+            tvborderMesh2.position.y = tvgeometry.parameters.height + 1
+            tvborderMesh2.position.x = -16 / 9 - 0.1
+
+            combined.add(tvborderMesh2)
+
+            var tvborderGeometry3 = new THREE.CubeGeometry(
+                (2 * 16) / 9 + 0.4,
+                0.2,
+                0.2
+            )
+            var tvborderMesh3 = new THREE.Mesh(
+                tvborderGeometry3,
+                tvborderMaterial
+            )
+            tvborderMesh3.position.y = tvgeometry.parameters.height + 1
+            tvborderMesh3.position.z = 1 + 0.1
+
+            combined.add(tvborderMesh3)
+
+            var tvborderGeometry4 = new THREE.CubeGeometry(
+                (2 * 16) / 9 + 0.4,
+                0.2,
+                0.2
+            )
+            var tvborderMesh4 = new THREE.Mesh(
+                tvborderGeometry4,
+                tvborderMaterial
+            )
+            tvborderMesh4.position.y = tvgeometry.parameters.height + 1
+            tvborderMesh4.position.z = -1 - 0.1
+
+            combined.add(tvborderMesh4)
+
+            ////////////////////////////////////////////////////////////////////////
+
+            ////////////////////////////////////////////////////////////////////////
+
+            // Add the box mesh to the scene
+            scene.add(combined)
+
+            // Position the camera
+            camera.position.z = 5
+
+            // Lights
+
+            const pointLight = new THREE.PointLight(0x80ffffff)
+            pointLight.position.set(0, 5, -7)
+
+            const ambientLight = new THREE.AmbientLight(0x11ffffff)
+            scene.add(pointLight, ambientLight)
+
+            // Create an animation loop
+            function animate() {
+                requestAnimationFrame(animate)
+
+                // Rotate the box on the x and y axes
+                combined.rotation.x += 0.01
+                combined.rotation.y += 0.01
+
+                // Render the scene with the camera
+                renderer.render(scene, camera)
+            }
+
+            // Start the animation loop
+            animate()
+        </script>
+    </body>
+</html>
